@@ -1,0 +1,137 @@
+features:
+  # ── Biometria ─────────────────────────────────────────────────────────────
+  biometric:
+    - name: bio_liveness_score
+      type: float
+      range: [0.0, 1.0]
+      description: "Score de liveness do provedor (probabilidade de ser pessoa real)"
+    - name: bio_face_match_score
+      type: float
+      range: [0.0, 1.0]
+      description: "Score de correspondência facial documento vs selfie"
+    - name: bio_attempts
+      type: int
+      range: [1, 10]
+      description: "Número de tentativas de biometria"
+    - name: bio_liveness_passed
+      type: bool
+      description: "Liveness aprovado pelo provedor (threshold interno)"
+    - name: bio_face_match_passed
+      type: bool
+      description: "Face match aprovado pelo provedor"
+    - name: bio_failure_rate
+      type: float
+      range: [0.0, 1.0]
+      description: "Taxa de falha nas tentativas de biometria (derivada)"
+
+  # ── Dispositivo ───────────────────────────────────────────────────────────
+  device:
+    - name: device_is_rooted
+      type: bool
+      description: "Dispositivo com root/jailbreak detectado"
+    - name: device_is_emulator
+      type: bool
+      description: "Dispositivo é um emulador (Android/iOS)"
+    - name: device_fraud_score
+      type: float
+      range: [0.0, 1.0]
+      description: "Score de risco do dispositivo (provedor externo)"
+    - name: device_cpfs_30d
+      type: int
+      description: "Quantidade de CPFs distintos que usaram este device em 30 dias"
+    - name: device_age_days
+      type: int
+      description: "Idade do device em dias (desde primeiro uso detectado)"
+    - name: app_is_tampered
+      type: bool
+      description: "Aplicativo com sinais de adulteração detectados"
+
+  # ── Geolocalização ────────────────────────────────────────────────────────
+  geolocation:
+    - name: is_vpn
+      type: bool
+      description: "IP identificado como VPN"
+    - name: is_tor
+      type: bool
+      description: "IP identificado como nó TOR"
+    - name: is_proxy
+      type: bool
+      description: "IP identificado como proxy"
+    - name: is_foreign_ip
+      type: bool
+      description: "IP originário de fora do Brasil"
+    - name: distance_from_cep_km
+      type: float
+      description: "Distância em km entre IP geolocalizado e CEP do cadastro"
+    - name: anonymizer_score
+      type: int
+      range: [0, 3]
+      description: "Soma de is_vpn + is_tor + is_proxy (derivada)"
+
+  # ── Comportamento de sessão ───────────────────────────────────────────────
+  session:
+    - name: session_completion_seconds
+      type: float
+      description: "Tempo total de preenchimento do formulário em segundos"
+    - name: is_suspiciously_fast
+      type: bool
+      description: "Sessão concluída em menos de 30 segundos"
+    - name: is_night_session
+      type: bool
+      description: "Sessão iniciada entre 22h e 5h"
+    - name: copy_paste_count
+      type: int
+      description: "Número de eventos de copy-paste detectados"
+    - name: typing_speed_cv
+      type: float
+      description: "Coeficiente de variação da velocidade de digitação (regularidade)"
+
+  # ── Velocidade histórica (feature store) ─────────────────────────────────
+  velocity:
+    - name: cpf_onboardings_7d
+      type: int
+      description: "Tentativas de onboarding no mesmo CPF nos últimos 7 dias"
+    - name: cpf_onboardings_30d
+      type: int
+      description: "Tentativas de onboarding no mesmo CPF nos últimos 30 dias"
+    - name: device_cpfs_7d
+      type: int
+      description: "CPFs distintos no mesmo device nos últimos 7 dias"
+    - name: ip_onboardings_24h
+      type: int
+      description: "Onboardings no mesmo IP nas últimas 24 horas"
+
+  # ── DICT Bacen / Bureau ───────────────────────────────────────────────────
+  regulatory:
+    - name: has_pix_key
+      type: bool
+      description: "CPF possui chave Pix ativa no DICT"
+    - name: pix_key_age_days
+      type: int
+      nullable: true
+      description: "Idade da chave Pix mais antiga em dias"
+    - name: n_complaints_bacen
+      type: int
+      description: "Número de reclamações registradas no Bacen"
+    - name: is_in_cadin
+      type: bool
+      description: "CPF presente no CADIN (Cadastro de Inadimplentes)"
+    - name: chargeback_ratio_90d
+      type: float
+      description: "Ratio de chargeback nos últimos 90 dias"
+
+# ── Features de alto risco (usadas em hard rules) ────────────────────────────
+high_risk_flags:
+  - device_is_emulator
+  - is_tor
+  - app_is_tampered
+  - cpf_onboardings_7d  # > 3 = blocklist automático
+
+# ── Features que NÃO devem ser usadas (LGPD / viés) ─────────────────────────
+excluded_features:
+  - gender
+  - race
+  - religion
+  - cpf_raw              # usar apenas cpf_hash
+  - name_raw             # dado PII — nunca como feature
+  - photo_b64            # imagem biométrica — nunca armazenar

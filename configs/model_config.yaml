@@ -1,0 +1,103 @@
+model:
+  name: fraud-onboarding-score
+  version: "1.0.0"
+
+  # ── LightGBM (modelo champion base) ─────────────────────────────────────────
+  lgbm:
+    n_estimators: 500
+    learning_rate: 0.05
+    max_depth: 6
+    num_leaves: 31
+    min_child_samples: 100
+    min_child_weight: 0.01
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.1
+    reg_lambda: 0.1
+    scale_pos_weight: 49        # calculado: (n_negativos / n_positivos) para 2% fraude
+    objective: binary
+    metric: average_precision
+    random_state: 42
+    n_jobs: -1
+    early_stopping_rounds: 50
+
+  # ── XGBoost (challenger no ensemble) ─────────────────────────────────────────
+  xgb:
+    n_estimators: 500
+    learning_rate: 0.05
+    max_depth: 6
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    scale_pos_weight: 49
+    eval_metric: aucpr
+    random_state: 42
+    n_jobs: -1
+
+  # ── CatBoost (melhor para features categóricas de alta cardinalidade) ────────
+  catboost:
+    iterations: 500
+    learning_rate: 0.05
+    depth: 6
+    l2_leaf_reg: 3.0
+    class_weights: [1, 49]
+    random_seed: 42
+    verbose: 0
+
+  # ── Ensemble ─────────────────────────────────────────────────────────────────
+  ensemble:
+    voting: soft
+    weights: [0.5, 0.3, 0.2]   # lgbm, xgb, catboost
+
+  # ── Calibração ───────────────────────────────────────────────────────────────
+  calibration:
+    method: sigmoid              # Platt Scaling
+    cv: 5
+
+  # ── Score transform ──────────────────────────────────────────────────────────
+  score:
+    min: 0
+    max: 1000
+    # score ALTO = BAIXO risco (padrão bureau de crédito)
+    bands:
+      BAIXO:      [800, 1000]
+      MEDIO_BAIXO: [600, 799]
+      MEDIO_ALTO:  [400, 599]
+      ALTO:        [200, 399]
+      CRITICO:     [0,   199]
+
+# ── Thresholds de decisão ────────────────────────────────────────────────────
+# Probabilidade de fraude (0-1): acima de reject → REJEITADO
+# abaixo de approve → APROVADO; entre os dois → REVISÃO MANUAL
+thresholds:
+  default:
+    approve: 0.15              # probabilidade fraude < 15% → aprovação automática
+    reject: 0.60               # probabilidade fraude > 60% → rejeição automática
+  conservative:                # modo campanhas / alta fraude
+    approve: 0.10
+    reject: 0.50
+  permissive:                  # modo expansão / baixa fraude
+    approve: 0.20
+    reject: 0.70
+
+# ── Treinamento ──────────────────────────────────────────────────────────────
+training:
+  test_size: 0.20
+  validation_size: 0.10
+  stratify: true
+  random_state: 42
+  cv_folds: 5
+
+# ── MLflow ───────────────────────────────────────────────────────────────────
+mlflow:
+  experiment_name: fraud-onboarding-score
+  tracking_uri: mlflow/mlruns    # em prod: URL do MLflow server
+
+# ── Performance mínima para deploy ──────────────────────────────────────────
+quality_gates:
+  min_ks: 0.40
+  min_roc_auc: 0.88
+  min_pr_auc: 0.60
+  max_false_positive_rate: 0.10
+  min_fraud_capture_rate: 0.80
